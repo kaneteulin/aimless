@@ -1,0 +1,7 @@
+name: Aimless
+main: com.github.noonmaru.aimless.plugin.AimlessPlugin
+api-version: '26.3'
+version: ${version}
+authors: [ Noonmaru, kaneteulin ]
+commands:
+  aimless: {}

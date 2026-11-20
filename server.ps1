@@ -1,0 +1,419 @@
+﻿# Paper 서버 실행 스크립트 (Aimless for Paper 26.3)
+#
+# Original work: server.ps1 from InvCaptive 0.2.0 by Noonmaru
+#   https://github.com/monun/inv-captive - GPL-3.0
+#
+# Modified 2026-11-20 by kaneteulin:
+#   - PaperMC Fill v3 API로 Paper 다운로드 (SHA-256 검증), Java 버전 확인, 권장 JVM 플래그
+#   - Aimless 직접 빌드 / GitHub Releases 다운로드
+#   - Aimless 의 2시간 자동 재시작을 항상 우선 (재시작 표시 파일이 있으면 바로 다시 시작)
+#   - TLS 1.2, 백업 예외 목록, 재시작 선택 대기 등 수정
+#
+# This program is free software: you can redistribute it and/or modify it under the terms of
+# the GNU General Public License as published by the Free Software Foundation, version 3.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License (LICENSE.md) for more details.
+
+# Aimless 설치 (서버 시작/재시작 때마다)
+#  - 이 스크립트 옆에 aimless 폴더(소스)가 있으면: 직접 빌드해서 설치 (개발용, JDK 필요)
+#  - 없으면: GitHub Releases 에서 최신 Aimless.jar 다운로드
+$Build = $true
+$PluginProject = "aimless"
+$PluginName = "Aimless"
+$GitHubRepo = "kaneteulin/aimless"
+
+# JVM
+$Xms = "8G"
+$Xmx = "8G"
+$Debug = $false
+$Jar = "paper.jar"
+$UseRecommendedFlags = $true   # PaperMC API가 권장하는 JVM 플래그 사용
+
+# Paper
+# 특정 버전(예: "26.3")을 지정하거나 "latest"로 두면 최신 안정 버전을 자동으로 받습니다.
+$Version = "26.3"
+
+# Plugins (Aimless 외에 추가로 받을 플러그인 주소)
+$Plugins = @(
+)
+
+# Backup
+$AskBackup = $false
+
+# Restart
+# - Aimless 의 자동 재시작(2시간마다): 묻지 않고 바로 다시 시작 (항상 우선)
+# - stop 으로 정상 종료한 경우: 묻지 않고 완전히 종료
+# - 크래시 등 비정상 종료한 경우: 다시 시작할지 묻고, 아래 시간(초) 동안 입력이 없으면 자동으로 다시 시작
+$RestartTimeout = 10
+$RestartMarker = "aimless-restart.flag"   # Aimless 플러그인이 재시작 직전에 서버 폴더에 만드는 파일
+
+# PowerShell 5.1은 기본적으로 TLS 1.2를 쓰지 않아 GitHub/PaperMC 다운로드가 실패할 수 있음
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# PaperMC API는 User-Agent를 요구함
+$UserAgent = "server-ps1/2.0"
+$PaperApi = "https://fill.papermc.io/v3/projects/paper"
+
+Function Download-File
+{
+    [CmdletBinding()]
+    Param (
+        [string]$Url,
+        [string]$Folder,
+        [Parameter(Mandatory = $False)] [string]$Filename,
+        [switch]$Force
+    )
+
+    Create-Directory $Folder
+
+    $Destfolder = (Resolve-Path $Folder).Path
+    $WebResponse = $null
+
+    try
+    {
+        $WebRequest = [System.Net.HttpWebRequest]::Create($Url)
+        $WebRequest.Method = "GET"
+        $WebRequest.UserAgent = $UserAgent
+        $WebResponse = $WebRequest.GetResponse()
+
+        if ([string]::IsNullOrEmpty($Filename))
+        {
+            $Disposition = $WebResponse.Headers['Content-Disposition']
+
+            if ([string]::IsNullOrEmpty($Disposition))
+            {
+                $Filename = [System.IO.Path]::GetFileName($WebResponse.ResponseUri.AbsolutePath)
+            }
+            else
+            {
+                $Filename = [System.Net.Mime.ContentDisposition]::new($Disposition).FileName
+            }
+        }
+
+        $Dest = Join-Path $Destfolder $Filename
+        $FileInfo = [System.IO.FileInfo]$Dest
+
+        if (Test-Path $Dest)
+        {
+            if (!$Force -and [datetime]::Compare($WebResponse.LastModified, $FileInfo.LastWriteTime) -eq 0)
+            {
+                Write-Host "UP-TO-DATE $Filename ($Url)"
+                return
+            }
+            Write-Host "Updating $Filename from $Url"
+        }
+        else
+        {
+            Write-Host "Downloading $Filename from $Url"
+        }
+
+        $ResponseStream = $WebResponse.GetResponseStream()
+        $FileWriter = New-Object System.IO.FileStream ($Dest, [System.IO.FileMode]::Create)
+        try
+        {
+            $ResponseStream.CopyTo($FileWriter)
+        }
+        finally
+        {
+            $FileWriter.Close()
+            $ResponseStream.Close()
+        }
+        $FileInfo.LastWriteTime = $WebResponse.LastModified
+    }
+    catch
+    {
+        Write-Host "  Failed to download $Url - $($_.Exception.Message)" -ForegroundColor Red
+    }
+    finally
+    {
+        if ($WebResponse) { $WebResponse.Dispose() }
+    }
+}
+
+Function Create-Directory([string]$PathName)
+{
+    if (!(Test-Path $PathName))
+    {
+        New-Item $PathName -Type Directory | Out-Null
+    }
+}
+
+Function Agree-EULA
+{
+    $Eula = "eula.txt"
+    if (!(Test-Path $Eula))
+    {
+        New-Item $Eula -ItemType "file" | Out-Null
+        Add-Content $Eula "eula=true"
+    }
+}
+
+Function Invoke-PaperApi([string]$Path)
+{
+    return Invoke-RestMethod "$PaperApi$Path" -Headers @{ "User-Agent" = $UserAgent }
+}
+
+Function Resolve-PaperVersion([string]$Version)
+{
+    if ($Version -ne "latest")
+    {
+        return $Version
+    }
+
+    # versions는 최신 그룹부터 정렬되어 있음 (예: 26.3, 26.2, ...)
+    $Project = Invoke-PaperApi ""
+    foreach ($Group in $Project.versions.PSObject.Properties)
+    {
+        $Stable = $Group.Value | Where-Object { $_ -notmatch "-" } | Select-Object -First 1
+        if ($Stable)
+        {
+            return $Stable
+        }
+    }
+    throw "Paper 최신 버전을 찾을 수 없습니다."
+}
+
+Function Update-Paper([string]$Version, [string]$Jar)
+{
+    $PaperBuild = Invoke-PaperApi "/versions/$Version/builds/latest"
+    $Download = $PaperBuild.downloads.'server:default'
+
+    if ((Test-Path $Jar) -and ((Get-FileHash $Jar -Algorithm SHA256).Hash -eq $Download.checksums.sha256))
+    {
+        Write-Host "UP-TO-DATE paper $Version build $($PaperBuild.id)"
+        return
+    }
+
+    Write-Host "Paper $Version build $($PaperBuild.id) ($($PaperBuild.channel))"
+    Download-File $Download.url "." $Jar -Force
+
+    if (!(Test-Path $Jar) -or (Get-FileHash $Jar -Algorithm SHA256).Hash -ne $Download.checksums.sha256)
+    {
+        throw "paper.jar 체크섬이 일치하지 않습니다. 다운로드를 다시 시도하세요."
+    }
+}
+
+Function Get-JavaMajorVersion
+{
+    $Output = (& java -version 2>&1 | ForEach-Object { "$_" }) -join "`n"
+    if ($Output -match 'version "(\d+)(?:\.(\d+))?')
+    {
+        if ($Matches[1] -eq "1") { return [int]$Matches[2] }   # 1.8 -> 8
+        return [int]$Matches[1]
+    }
+    return 0
+}
+
+function Choice
+{
+    Param(
+        [string]$Prompt,
+        [string]$Choice,
+        [char]$Default,
+        [int]$Seconds
+    )
+
+    $Choice = $Choice.ToUpper()
+    $Deadline = (Get-Date).AddSeconds($Seconds)
+
+    Write-Host $Prompt
+
+    $Choose = $Default
+
+    while ((Get-Date) -lt $Deadline)
+    {
+        if ($host.UI.RawUI.KeyAvailable)
+        {
+            [string]$Key = ($host.UI.RawUI.ReadKey("IncludeKeyDown,NoEcho")).character
+            $Key = $Key.ToUpper().ToCharArray()[0]
+
+            if ($Choice.Contains($Key))
+            {
+                $Choose = $Key
+                Break
+            }
+        }
+
+        Start-Sleep -Milliseconds 50
+    }
+
+    Write-Host $Choose
+
+    return $Choose
+}
+
+Function Backup
+{
+    if (!(Get-Command 7z -ErrorAction SilentlyContinue))
+    {
+        Write-Host "7z를 찾을 수 없어 백업을 건너뜁니다. 7-Zip을 PATH에 추가하세요." -ForegroundColor Yellow
+        return
+    }
+
+    $Backup = "backup"
+
+    Create-Directory $Backup
+
+    $Date = Get-Date -Format "yyyy-MM-dd HHmmss"
+    $ArchiveName = "$Backup/$Date.zip"
+    7z a -tzip $ArchiveName ./ "-xr!*.gz" "-x!$Jar" "-x!backup" "-x!cache" "-x!libraries" "-x!versions" | Out-Null
+
+    if ($LASTEXITCODE -eq 0)
+    {
+        Write-Host "Backup completed $ArchiveName"
+    }
+    else
+    {
+        Write-Host "Backup failed (7z exit code $LASTEXITCODE)" -ForegroundColor Red
+    }
+}
+
+Function Install-Plugin
+{
+    if (Test-Path (Join-Path $ProjectFolder "$PluginProject\build.ps1"))
+    {
+        Invoke-PluginBuild
+    }
+    elseif ($GitHubRepo)
+    {
+        $Release = "https://github.com/$GitHubRepo/releases/latest/download"
+        Download-File "$Release/$PluginName.jar" "plugins" "$PluginName.jar"
+    }
+    else
+    {
+        Write-Host "$PluginName 소스($PluginProject 폴더)도, `$GitHubRepo 설정도 없어 $PluginName 을(를) 설치하지 않습니다." -ForegroundColor Yellow
+    }
+}
+
+Function Invoke-PluginBuild
+{
+    $ProjectDir = Join-Path $ProjectFolder $PluginProject
+    Create-Directory "plugins"
+
+    # 플러그인은 서버 내부 코드(NMS)를 참조하므로 현재 버전의 패치된 서버 jar가 있어야 컴파일 가능
+    if (!(Get-ChildItem "versions\$Version" -Filter *.jar -ErrorAction SilentlyContinue))
+    {
+        Write-Host "Preparing Paper $Version server jar for plugin build..."
+        java "-Dpaperclip.patchonly=true" -jar $Jar | Out-Null
+    }
+
+    $BuildScript = Join-Path $ProjectDir "build.ps1"
+    $Output = Join-Path $ProjectDir "build\$PluginName.jar"
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File $BuildScript -ServerDir (Get-Location).Path -McVersion $Version -Output $Output
+
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Host "$PluginName 빌드 실패 - 기존 플러그인으로 서버를 시작합니다." -ForegroundColor Red
+        return
+    }
+
+    Copy-Item $Output "plugins\$PluginName.jar" -Force
+    Write-Host "Installed $PluginName.jar"
+}
+
+$ProjectFolder = $PSScriptRoot
+Set-Location $ProjectFolder
+
+$Folder = ".$( [System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath) )"
+
+# Setup
+Create-Directory $Folder
+Set-Location $Folder
+Agree-EULA
+
+# Download paper
+$Version = Resolve-PaperVersion $Version
+$host.UI.RawUI.WindowTitle = "aimless - paper $Version"
+$VersionInfo = (Invoke-PaperApi "/versions/$Version").version
+
+$JavaMin = [int]$VersionInfo.java.version.minimum
+$JavaVersion = Get-JavaMajorVersion
+if ($JavaVersion -lt $JavaMin)
+{
+    Write-Host "Paper $Version 은(는) Java $JavaMin 이상이 필요합니다. 현재 Java: $JavaVersion" -ForegroundColor Red
+    Set-Location $ProjectFolder
+    return
+}
+
+Update-Paper $Version $Jar
+
+# Download plugins
+foreach ($Plugin in $Plugins)
+{
+    Download-File $Plugin "plugins"
+}
+
+# Build JVM args
+$JVMArgs = [System.Collections.ArrayList]@(
+"-Xms$Xms",
+"-Xmx$Xmx"
+)
+
+if ($UseRecommendedFlags -and $VersionInfo.java.flags.recommended)
+{
+    foreach ($Flag in $VersionInfo.java.flags.recommended)
+    {
+        [void]$JVMArgs.Add($Flag)
+    }
+}
+
+if ($Debug)
+{
+    [void]$JVMArgs.Add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005")
+}
+
+[void]$JVMArgs.Add("-jar")
+[void]$JVMArgs.Add($Jar)
+[void]$JVMArgs.Add("--nogui")
+
+# Run
+While ($true)
+{
+    if ($Build)
+    {
+        Install-Plugin
+    }
+
+    # 이전 실행에서 남은 재시작 표시 제거
+    if (Test-Path $RestartMarker) { Remove-Item $RestartMarker -Force }
+
+    java $JVMArgs
+    $ExitCode = $LASTEXITCODE
+
+    if ($AskBackup)
+    {
+        $SkipBackup = Choice "Skip the backup? [Y]es, [N]o" "YN" 'N' 3
+
+        if ($SkipBackup -eq 'N')
+        {
+            Backup
+        }
+    }
+
+    Write-Host ""
+    if (Test-Path $RestartMarker)
+    {
+        # Aimless 자동 재시작 -> 항상 우선, 묻지 않고 바로 다시 시작
+        Remove-Item $RestartMarker -Force
+        Write-Host "Aimless 자동 재시작: 서버를 다시 시작합니다."
+        $Restart = 'Y'
+    }
+    elseif ($ExitCode -eq 0)
+    {
+        # stop 으로 정상 종료 -> 묻지 않고 완전히 종료
+        Write-Host "서버가 종료되었습니다."
+        $Restart = 'N'
+    }
+    else
+    {
+        $Restart = Choice "서버가 비정상 종료되었습니다 (종료 코드 $ExitCode). 다시 시작할까요? [Y]es [N]o  ($RestartTimeout초 후 자동으로 Y)" "YN" 'Y' $RestartTimeout
+    }
+
+    if ($Restart -eq 'N')
+    {
+        Set-Location $ProjectFolder
+        Break
+    }
+}
