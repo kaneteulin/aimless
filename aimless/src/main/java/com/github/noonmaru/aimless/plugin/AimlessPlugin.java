@@ -8,6 +8,7 @@
  *   - Rewritten from Kotlin to Java for Paper 26.3 (Kotlin / ProtocolLib dependencies removed)
  *   - Restarter leaves a restart marker so server.ps1 restarts the server
  *   - Game rule playersSleepingPercentage set to 101 (sleeping never skips the night)
+ *   - Game rule locatorBar disabled (no nearby player indicators)
  *     (a manual "stop" fully shuts the server down)
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
@@ -55,6 +56,8 @@ public final class AimlessPlugin extends JavaPlugin {
             world.setGameRule(GameRules.REDUCED_DEBUG_INFO, true);
             // 101%: 모두 자도 밤이 넘어가지 않음 (자는 사람 수로 접속 인원을 알 수 없게)
             world.setGameRule(GameRules.PLAYERS_SLEEPING_PERCENTAGE, 101);
+            // 경험치 바 위의 위치 표시 바(근처 플레이어 방향) 끄기
+            world.setGameRule(GameRules.LOCATOR_BAR, false);
         }
 
         World world = Bukkit.getWorlds().getFirst();

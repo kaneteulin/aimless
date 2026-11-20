@@ -10,6 +10,7 @@
  *     symbols) with "?????" regardless of its length
  *   - Server list MOTD year changed to 2026
  *   - Emotes triggered from chat run on the main thread
+ *   - Maps no longer show player position markers
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
  * the GNU General Public License as published by the Free Software Foundation, version 3.
@@ -44,8 +45,10 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerKickEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.server.MapInitializeEvent;
 import org.bukkit.event.server.TabCompleteEvent;
 import org.bukkit.inventory.meta.BookMeta;
+import org.bukkit.map.MapView;
 import org.bukkit.util.NumberConversions;
 
 import java.util.ArrayList;
@@ -61,6 +64,14 @@ public final class EventListener implements Listener {
 
     EventListener(AimlessPlugin plugin) {
         this.plugin = plugin;
+    }
+
+    // 지도에 플레이어 위치 표식을 표시하지 않음 (새 지도, 저장된 지도를 처음 불러올 때 모두 적용)
+    @EventHandler
+    public void onMapInitialize(MapInitializeEvent event) {
+        MapView map = event.getMap();
+        map.setTrackingPosition(false);
+        map.setUnlimitedTracking(false);
     }
 
     @EventHandler
