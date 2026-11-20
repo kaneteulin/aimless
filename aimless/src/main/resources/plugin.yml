@@ -1,3 +1,5 @@
+# Original: Aimless 0.1.2 by Noonmaru (https://github.com/noonmaru/aimless), GPL-3.0
+# Modified 2026-11-20 by kaneteulin. Licensed under the GNU GPL version 3, see LICENSE.md.
 name: Aimless
 main: com.github.noonmaru.aimless.plugin.AimlessPlugin
 api-version: '26.3'
