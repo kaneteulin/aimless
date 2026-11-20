@@ -9,6 +9,7 @@
  *   - Builds the 26.3 player info update packet directly (ProtocolLib dependency removed;
  *     the packet format changed in 1.19.3). Game mode and latency of every entry are
  *     overwritten like the original ADD_PLAYER did.
+ *   - Every entry is sent as unlisted, so the Tab list shows nobody (no player faces)
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
  * the GNU General Public License as published by the Free Software Foundation, version 3.
@@ -32,7 +33,8 @@ import java.util.EnumSet;
 import java.util.List;
 
 /**
- * 접속한 적 있는 모든 플레이어(오프라인 포함)를 Tab 목록에 표시해 누가 접속 중인지 알 수 없게 한다.
+ * 접속한 적 있는 모든 플레이어(오프라인 포함)의 정보를 보내되 Tab 목록에서는 모두 숨긴다.
+ * (원본은 모두 Tab 목록에 표시해 누가 접속 중인지 알 수 없게 했다)
  */
 public final class PlayerList implements Runnable {
 
@@ -71,7 +73,7 @@ public final class PlayerList implements Runnable {
             list.add(new ClientboundPlayerInfoUpdatePacket.Entry(
                     offlinePlayer.getUniqueId(),
                     profile,
-                    true,               // listed
+                    false,              // listed: Tab 목록에 아무도 표시하지 않음 (얼굴 숨김, 원본은 true)
                     0,                  // latency
                     GameType.SURVIVAL,  // 원본: NOT_SET
 
