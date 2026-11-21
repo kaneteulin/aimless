@@ -66,6 +66,8 @@ public final class AimlessPlugin extends JavaPlugin {
         border.setSize(16384.0);
         world.setSpawnLocation(world.getHighestBlockAt(0, 0).getLocation());
 
+        PlayerList.loadSkins(new File(getDataFolder(), "skins.yml"));
+
         getServer().getPluginManager().registerEvents(new EventListener(this), this);
         getServer().getScheduler().runTaskTimer(this, PlayerList.INSTANCE, 0L, 1L);
         getServer().getScheduler().runTaskTimer(this, new Restarter(this), 20L * 60L, 20L * 60L);

@@ -84,9 +84,12 @@ public final class EventListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         event.joinMessage(null);
 
-        PlayerList.update();
-
         Player player = event.getPlayer();
+
+        // 서버가 이 플레이어의 실제 스킨 정보를 보내기 전에, 오프라인일 때 보냈던 정보를 지운다
+        PlayerList.forget(player);
+        PlayerList.rememberSkin(player);
+        PlayerList.update();
 
         if (!player.hasPlayedBefore()) {
             player.teleport(getSpawnLocation(player.getName()));
