@@ -10,6 +10,7 @@
  *   - Game rule playersSleepingPercentage set to 101 (sleeping never skips the night)
  *   - Game rule locatorBar disabled (no nearby player indicators)
  *   - Paper Anti-Xray settings written on enable (one automatic restart when they change)
+ *   - World border enlarged from 16384 to 49152
  *     (a manual "stop" fully shuts the server down)
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
@@ -64,7 +65,7 @@ public final class AimlessPlugin extends JavaPlugin {
         World world = Bukkit.getWorlds().getFirst();
         WorldBorder border = world.getWorldBorder();
         border.setCenter(new Location(world, 0.0, 0.0, 0.0));
-        border.setSize(16384.0);
+        border.setSize(49152.0); // 원본: 16384 (3배로 확장)
         world.setSpawnLocation(world.getHighestBlockAt(0, 0).getLocation());
 
         PlayerList.loadSkins(new File(getDataFolder(), "skins.yml"));
