@@ -9,6 +9,7 @@
  *   - Restarter leaves a restart marker so server.ps1 restarts the server
  *   - Game rule playersSleepingPercentage set to 101 (sleeping never skips the night)
  *   - Game rule locatorBar disabled (no nearby player indicators)
+ *   - Paper Anti-Xray settings written on enable (one automatic restart when they change)
  *     (a manual "stop" fully shuts the server down)
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
@@ -71,6 +72,23 @@ public final class AimlessPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new EventListener(this), this);
         getServer().getScheduler().runTaskTimer(this, PlayerList.INSTANCE, 0L, 1L);
         getServer().getScheduler().runTaskTimer(this, new Restarter(this), 20L * 60L, 20L * 60L);
+
+        // Anti-Xray 설정이 새로 바뀌었으면 적용을 위해 바로 한 번 재시작 (처음 한 번만)
+        if (AntiXray.apply(getLogger())) {
+            getLogger().info("Anti-Xray 설정 적용을 위해 서버를 재시작합니다.");
+            getServer().getScheduler().runTask(this, () -> {
+                markRestart(this);
+                Bukkit.shutdown();
+            });
+        }
+    }
+
+    static void markRestart(AimlessPlugin plugin) {
+        try {
+            new File(Bukkit.getWorldContainer(), RESTART_MARKER).createNewFile();
+        } catch (IOException e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to create restart marker", e);
+        }
     }
 
     static final class Restarter implements Runnable {
@@ -91,18 +109,10 @@ public final class AimlessPlugin extends JavaPlugin {
                 for (Player player : Bukkit.getOnlinePlayers()) {
                     player.sendMessage(Component.text("서버가 재시작됩니다."));
                 }
-                markRestart();
+                markRestart(plugin);
                 Bukkit.shutdown();
             } else if (elapsedTime >= restartTime - 60000L) {
                 Bukkit.broadcast(Component.text("1분 뒤 서버가 재시작됩니다."));
-            }
-        }
-
-        private void markRestart() {
-            try {
-                new File(Bukkit.getWorldContainer(), RESTART_MARKER).createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to create restart marker", e);
             }
         }
     }

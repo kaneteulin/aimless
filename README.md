@@ -52,6 +52,7 @@ Paper 서버와 Aimless 플러그인(Releases 의 최신 버전)이 자동으로
 - Tab 목록: 원본은 접속한 적 있는 모든 플레이어를 표시했지만, 이식본은 아무도 표시하지 않음
 - 게임 규칙 `players_sleeping_percentage` 101: 침대에서 자도 밤이 넘어가지 않음
 - 지도에 플레이어 위치 표식이 나오지 않음
+- X-ray 방지: Paper Anti-Xray(engine-mode 2)를 오버월드/네더에 자동 적용 (설정이 바뀐 경우 처음 한 번 자동 재시작)
 - 나간 플레이어도 마지막 스킨 얼굴로 표시 (`plugins/Aimless/skins.yml` 에 저장, P 키 화면에서 접속 여부를 구분할 수 없게)
 - 게임 규칙 `locator_bar` false: 경험치 바 위에 근처 플레이어 방향이 표시되지 않음
 
