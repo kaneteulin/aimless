@@ -13,6 +13,15 @@
 Paper 서버와 Aimless 플러그인(Releases 의 최신 버전)이 자동으로 설치되고 서버가 시작됩니다.
 (`server.ps1` 옆에 `aimless` 소스 폴더가 있으면 Releases 대신 직접 빌드하며, 이때는 JDK 25 이상이 필요합니다.)
 
+### 플러그인만 쓰는 경우
+
+이미 있는 **Paper 26.3** 서버의 `plugins` 폴더에 `Aimless.jar` 하나만 넣어도 모든 기능이 작동합니다.
+
+- 자동 재시작: Windows 에서는 같은 실행 명령으로 새 서버 창을 띄운 뒤 기존 서버를 끕니다.
+  다른 OS 에서는 `spigot.yml` 의 `restart-script` 가 설정되어 있어야 하며, 없으면 재시작하지 않습니다.
+- 자동 업데이트: 서버가 켜질 때 GitHub Releases 를 확인해 새 버전을 `plugins/update` 에 받아 두고, 다음 시작 때 적용됩니다.
+- `server.ps1` 로 실행하면 재시작과 업데이트는 `server.ps1` 이 맡습니다.
+
 ## 규칙
 
 - **채팅 금지** - 감정 표현 단어만 머리 위 파티클로 표시됩니다.
@@ -50,7 +59,7 @@ Paper 서버와 Aimless 플러그인(Releases 의 최신 버전)이 자동으로
 - 서버 목록 설명: `AIMLESS SERVER 2020` → `AIMLESS SERVER 2026`
 - 2시간 자동 재시작이 `server.ps1` 과 연동되어 항상 다시 켜짐
 - Tab 목록: 원본은 접속한 적 있는 모든 플레이어를 표시했지만, 이식본은 아무도 표시하지 않음
-- 게임 규칙 `players_sleeping_percentage` 101: 침대에서 자도 밤이 넘어가지 않음
+- 침대에서 잘 때 뜨는 "n/m 명이 자는 중" 메시지를 숨김 (접속 인원이 드러나지 않게, 잠 자체는 그대로)
 - 지도에 플레이어 위치 표식이 나오지 않음
 - X-ray 방지: Paper Anti-Xray(engine-mode 2)를 오버월드/네더에 자동 적용 (설정이 바뀐 경우 처음 한 번 자동 재시작)
 - 나간 플레이어도 마지막 스킨 얼굴로 표시 (`plugins/Aimless/skins.yml` 에 저장, P 키 화면에서 접속 여부를 구분할 수 없게)

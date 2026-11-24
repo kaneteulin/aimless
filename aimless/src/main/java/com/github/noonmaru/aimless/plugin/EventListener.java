@@ -11,6 +11,7 @@
  *   - Server list MOTD year changed to 2026
  *   - Emotes triggered from chat run on the main thread
  *   - Maps no longer show player position markers
+ *   - The "n/m players sleeping" message is not sent (it reveals the online player count)
  *
  * This program is free software: you can redistribute it and/or modify it under the terms of
  * the GNU General Public License as published by the Free Software Foundation, version 3.
@@ -90,6 +91,7 @@ public final class EventListener implements Listener {
         PlayerList.forget(player);
         PlayerList.rememberSkin(player);
         PlayerList.update();
+        SleepMessageFilter.inject(player);
 
         if (!player.hasPlayedBefore()) {
             player.teleport(getSpawnLocation(player.getName()));
